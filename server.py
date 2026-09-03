@@ -1061,9 +1061,9 @@ def api_stops():
         return jsonify({"stops": _state["stops_full"]})
 
 
-@app.route("/")
+@app.route('/')
 def index():
-    return send_from_directory(app.static_folder, "index.html")
+    return render_template('index.html')
 
 
 if __name__ == '__main__':
