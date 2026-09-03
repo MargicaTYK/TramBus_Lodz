@@ -1,25 +1,1779 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <title>TramBus Łódź</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            text-align: center;
-            margin-top: 100px;
-        }
-        h1 {
-            color: #2c3e50;
-        }
-        p {
-            color: #555;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Łódź — pojazdy na żywo</title>
+<link rel="icon" type="image/svg+xml" href="/icons/trabus-app-icon.svg">
+<link rel="icon" type="image/png" sizes="64x64" href="/icons/trabus-app-icon-64.png">
+<link rel="icon" type="image/png" sizes="128x128" href="/icons/trabus-app-icon-128.png">
+<link rel="icon" type="image/png" sizes="256x256" href="/icons/trabus-app-icon-256.png">
+<link rel="apple-touch-icon" sizes="512x512" href="/icons/trabus-app-icon-512.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root{
+    --bg: #111420; --panel: #1A1E2E; --panel-line: #2E3348;
+    --text: #E8ECF5; --text-dim: #949FBD;
+    --veh-tram: #C9A227; --veh-bus: #3E77A6;
+    --stop-tram: #FFD500; --stop-bus: #1E90FF;
+    --late: #D64545; --ontime: #43B75D;
+    --focus: #4ADE80; --warn-bg: #3A2A1A; --warn-text: #D9A441;
+  }
+  *{ box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--panel-line) var(--bg); }
+  /* Dark scrollbars everywhere (Chrome/Edge) instead of the browser's default light ones */
+  ::-webkit-scrollbar{ width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track{ background: var(--bg); }
+  ::-webkit-scrollbar-thumb{ background: var(--panel-line); border-radius: 6px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover{ background: var(--text-dim); }
+  ::-webkit-scrollbar-button{ display: none; }
+  ::-webkit-scrollbar-corner{ background: var(--bg); }
+  html,body{ height:100%; margin:0; }
+  body{
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  #brandHero{
+    display:flex; flex-direction:row; align-items:center; justify-content:flex-start;
+    padding: 16px 24px; background: var(--panel) url('/icons/downtown-bg.png') center/cover no-repeat;
+    border-bottom: 1px solid var(--panel-line);
+    gap: 14px;
+  }
+  .brand-logo{ width:104px; height:104px; flex-shrink:0; }
+  .brand-text{ display:flex; flex-direction:column; text-align:left; }
+  .brand-name{ font-size:38px; font-weight:750; color:var(--text); letter-spacing:0.3px; line-height:1.15; }
+  .brand-tagline{ font-size:22px; color:var(--text-dim); margin-top:4px; }
+  .hero-trust{
+    display:flex; flex-direction:column; justify-content:center;
+    margin-left:28px; padding-left:24px; border-left:1px solid var(--panel-line);
+  }
+  .hero-trust-headline{ font-size:20px; font-weight:600; color:var(--text); letter-spacing:0.2px; line-height:1.3; }
+  .hero-trust-sub{ font-size:13px; color:var(--text-dim); margin-top:5px; font-variant-numeric:tabular-nums; }
+  .h1-icon{ width:20px; height:20px; vertical-align:middle; margin-right:8px; }
+  header{
+    padding: 12px 20px; border-bottom: 1px solid var(--panel-line);
+    display:flex; align-items:baseline; gap: 18px; flex-wrap: wrap; background: var(--panel);
+  }
+  header h1{ font-size: 17px; font-weight: 650; margin: 0; letter-spacing: 0.2px; }
+  .stats-ticker{
+    font-size: 13px; color: var(--text-dim); overflow: hidden; white-space: nowrap;
+    text-overflow: ellipsis; max-width: 360px; font-variant-numeric: tabular-nums;
+  }
+  .stats-ticker strong{ color: var(--focus); font-weight: 650; }
+  .date-display{ display:flex; flex-direction:column; align-items:flex-end; line-height:1.2; }
+  .date-value{ font-size: 16px; font-weight: 650; color: var(--text); letter-spacing: 0.2px; }
+  .date-day{ font-size: 11px; color: var(--text-dim); }
+  footer .meta{ font-size: 11.5px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  footer .meta strong{ color: var(--text); font-weight: 600; }
+  #alertsBadge{
+    background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-text);
+    border-radius: 14px; padding: 4px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  }
+  #linksBadge{
+    background: rgba(145,132,217,0.14); color: #c3bbf0; border: 1px solid rgba(145,132,217,0.5);
+    border-radius: 14px; padding: 4px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  #linksBadge:hover{ background: rgba(145,132,217,0.26); }
+  #headerActions{ margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .dropdown-wrap{ position: relative; }
+  .dropdown-panel{
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 100;
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.55);
+    min-width: 260px; max-width: 360px; max-height: 260px; overflow-y: auto;
+    padding: 10px 16px;
+  }
+  .alert-item{ padding: 8px 0; border-bottom: 1px dashed var(--panel-line); font-size: 13px; }
+  .alert-item:last-child{ border-bottom: none; }
+  .alert-header{ font-weight: 700; color: var(--warn-text); }
+  .alert-routes{ display: flex; gap: 4px; margin: 4px 0; flex-wrap: wrap; }
+  .alert-desc{ color: var(--text-dim); font-size: 12.5px; margin-top: 3px; }
+  .dropdown-panel a{
+    display: block; padding: 7px 0; color: var(--focus); text-decoration: none; font-size: 13.5px; white-space: nowrap;
+  }
+  .dropdown-panel a:hover{ text-decoration: underline; }
+  #staleBanner{
+    display:none; padding: 8px 20px; background: var(--warn-bg); color: var(--warn-text);
+    font-size: 13px; border-bottom: 1px solid var(--panel-line);
+  }
+  main{ flex:1; display:flex; min-height:0; }
+  #map{ flex:1; background: var(--bg); }
+  .leaflet-tile-pane{ filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9); }
+  .leaflet-marker-pane, .leaflet-popup-pane{ filter: none; }
+  aside{
+    width: 320px; background: var(--panel); border-left: 1px solid var(--panel-line);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  .controls{ padding: 14px 16px; border-bottom: 1px solid var(--panel-line); display:flex; flex-direction:column; gap: 10px; }
+  .row{ display:flex; gap:8px; }
+  button.toggle{
+    flex:1; background: transparent; border: 1px solid var(--panel-line); color: var(--text-dim);
+    padding: 7px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  button.toggle[aria-pressed="true"]{ color: var(--focus); border-color: var(--focus); background: var(--panel-line); }
+
+  /* ===== Mobile layout: below 768px wide, the sidebar becomes a bottom
+     sheet instead of sitting beside the map — the map gets the full
+     screen (its whole reason for existing), and the controls/vehicle
+     list live in a panel that peeks up from the bottom edge, expandable
+     by tapping its handle. Confirmed via testing on a real phone before
+     this was built: the previous fixed-width-sidebar-beside-map layout
+     squeezed the map down to a barely-usable sliver on a real screen. */
+  #sheetHandle{ display:none; }
+  #timetableDragHandle{ display:none; }
+  @media (max-width: 768px) {
+    /* Substantially smaller hero: on a 390px-wide phone the previous
+       full-size logo + wrapped trust text consumed over half the screen
+       before any functional content appeared -- confirmed directly from
+       a real device screenshot. Shrink the logo, and drop the trust
+       block entirely on mobile: it's a first-impression/marketing line,
+       not something a returning mobile user needs competing for space
+       with the map on every visit. */
+    .brand-logo{ width:56px; height:56px; }
+    .brand-name{ font-size:26px; }
+    .brand-tagline{ font-size:15px; }
+    .hero-trust{ display:none; }
+    #brandHero{ padding: 10px 16px; flex-wrap: wrap; }
+
+    main{ position: relative; }
+    #map{ position: absolute; inset: 0; }
+    aside{
+      position: absolute; left:0; right:0; bottom:0; width:auto; top:auto;
+      max-height: 20vh; border-left:none; border-top: 1px solid var(--panel-line);
+      border-radius: 16px 16px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,0.45);
+      z-index: 500; transition: max-height 0.25s ease;
+      overflow-y: auto; overflow-x: hidden; /* THE actual bug from before: without this, max-height
+         constrained nothing -- content simply spilled out past the boundary, which is
+         why the sheet looked permanently "expanded" and covered the whole map regardless
+         of collapsed/expanded state. Confirmed directly from a real device screenshot. */
+    }
+    #sheetHandle{
+      display:flex; justify-content:center; align-items:center; padding:18px 0; cursor:grab; flex-shrink:0;
+      position: sticky; top: 0; background: var(--panel); z-index: 1;
+      min-height: 44px; /* the visual dash is tiny, but the actual tappable/draggable
+         area needs to be much bigger to be reliably grabbable -- 44px matches Apple's
+         own minimum recommended touch target size. Reported as hard to grab precisely
+         on a real device before this fix. */
+      touch-action: none; /* the drag handler manages vertical movement itself, but only HERE --
+         the scrollable content below still needs normal touch scrolling to work */
+    }
+    #sheetHandle::before{
+      content:''; width:36px; height:4px; background: var(--panel-line); border-radius:2px;
+    }
+    /* Leaflet's own zoom buttons and locate button were colliding with the
+       sheet's top edge and its content -- confirmed from a real device
+       screenshot. Touch devices pinch-to-zoom natively, so the on-screen
+       +/- buttons are redundant here, not just relocatable clutter. */
+    .leaflet-control-zoom{ display:none; }
+    .locate-btn{ top: 12px; }
+    .leaflet-control-attribution{ display:none; }
+    body.sheet-expanded .locate-btn{ display:none; }
+
+    /* Header wrap-cascade fix: the ticker's normal 360px max-width alone
+       nearly fills a 390px-wide screen, leaving no room for date/day
+       beside it -- forcing a wrap onto a second row and pushing content
+       down every time the ticker's text is long enough to trigger it.
+       Requested: smaller date/day text; the real fix also needed capping
+       the ticker, since shrinking date/day alone doesn't stop a long
+       enough ticker fact from wrapping regardless of how small the date is. */
+    .stats-ticker{ max-width: 170px; font-size: 11px; }
+    .date-value{ font-size: 11px; }
+    .date-day{ font-size: 9px; }
+    header h1{ font-size: 14px; }
+    header{ padding: 8px 16px; }
+
+    /* Requested: reclaim the space the always-visible footer attribution
+       bar was taking (and which was crowding right up against the sheet's
+       edge, per a real device screenshot) -- move it behind a small "Info"
+       toggle instead, matching the existing Legend button's pattern, and
+       only take up space when actually opened. */
+    footer{ display: none !important; }
+    #mobileInfoRow{ display: flex !important; }
+
+    /* The timetable/vehicle-detail panel gets the exact same drag-to-resize
+       treatment as the main sheet, for one consistent mobile interaction
+       language instead of two different popup behaviors. */
+    #timetableModalContent{
+      top: auto; left: 0; right: 0; bottom: 0; transform: none;
+      width: auto; max-width: none; max-height: 40vh;
+      border-radius: 16px 16px 0 0; overflow-y: auto;
+      padding-top: 0;
+    }
+    #timetableDragHandle{ display:flex; align-items:center; justify-content:center; padding:18px 0; min-height:44px; flex:1; cursor:grab; touch-action: none; }
+    #timetableDragHandle::before{
+      content:''; width:36px; height:4px; background: var(--panel-line); border-radius:2px;
+    }
+  }
+  button.toggle:focus-visible, input:focus-visible, .veh-row:focus-visible{ outline: 2px solid var(--focus); outline-offset: 2px; }
+  #search{
+    background: var(--bg); border: 1px solid var(--panel-line); color: var(--text);
+    padding: 8px 10px; border-radius: 6px; font-size: 13px; font-family: inherit;
+    flex: 1; min-width: 0;
+  }
+  #search option.inactive-line{ color: var(--text-dim); }
+  .stat-box{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background: var(--bg); border: 1px solid var(--panel-line); border-radius:6px;
+    padding: 4px 12px; min-width: 68px; flex-shrink: 0;
+  }
+  .stat-value{ font-family: "Courier New", ui-monospace, monospace; font-weight:800; font-size:16px; color:var(--text); line-height:1.15; }
+  .stat-label{ font-size:9px; color:var(--text-dim); white-space:nowrap; }
+  .legend{ display:flex; gap: 14px; font-size: 12px; color: var(--text-dim); padding: 0 16px 12px; border-bottom: 1px solid var(--panel-line); flex-wrap: wrap; }
+  .legend span{ display:flex; align-items:center; gap:6px; }
+  .legend .stop-marker{ opacity: 1 !important; }
+  body.vehicle-focus-mode .stop-marker{ opacity: 1; }
+  .legend .stop-letter{ font-size: 11px; }
+  .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .legend-triangle{
+    display:inline-block; width:0; height:0;
+    border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:15px solid;
+  }
+  #list{ overflow-y: auto; flex: 1; }
+  .veh-row{ display:flex; align-items:center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--panel-line); cursor: pointer; font-size: 13px; }
+  .veh-row:hover{ background: #202832; }
+  .veh-route{ font-family: "Courier New", ui-monospace, monospace; font-weight: 700; min-width: 34px; font-size: 13px; }
+  .veh-info{ flex:1; min-width:0; }
+  .veh-headsign{ white-space: nowrap; overflow:hidden; text-overflow: ellipsis; }
+  .veh-stop{ color: var(--text-dim); font-size: 11.5px; white-space: nowrap; overflow:hidden; text-overflow: ellipsis; }
+  .veh-delay{ font-family: "Courier New", ui-monospace, monospace; font-size: 12px; font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+  footer{
+    padding: 8px 20px; border-top: 1px solid var(--panel-line); background: var(--panel);
+    font-size: 11.5px; color: var(--text-dim);
+    display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .leaflet-popup-content-wrapper{ background: var(--panel); color: var(--text); border-radius: 8px; }
+  .leaflet-popup-tip{ background: var(--panel); }
+  .popup-route{ font-family: "Courier New", ui-monospace, monospace; font-weight:700; font-size: 15px; }
+  .popup-row{ font-size: 12.5px; margin-top: 4px; color: var(--text-dim); display:flex; justify-content:space-between; gap:14px; }
+  .popup-row b{ color: var(--text); font-weight:600; }
+  .popup-delay{ font-size: 13px; margin-top: 6px; font-family: "Courier New", ui-monospace, monospace; font-weight:700; }
+  #sr-status{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+
+  /* --- vehicle markers: dot + heading arrow + zoom-revealed line label --- */
+  .veh-marker{ position: relative; width: 24px; height: 24px; }
+  .veh-ring{
+    position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%;
+    border: 2px solid; background: rgba(18,22,27,0.9);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .veh-arrow{
+    width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent;
+    border-bottom:9px solid; transform-origin: 50% 65%;
+  }
+  .veh-puck{ width:8px; height:8px; border-radius:50%; }
+  .veh-square{ width:8px; height:8px; border-radius:1px; }
+  .veh-label{
+    position:absolute; top: 23px; left:50%; transform: translateX(-50%);
+    font-family: "Courier New", ui-monospace, monospace; font-size: 10px; font-weight:700;
+    color:#fff; background: rgba(18,22,27,0.92); padding:1px 5px; border-radius:3px;
+    white-space:nowrap; display:none; pointer-events:none; border: 1px solid var(--panel-line);
+  }
+  #map.zoomed-in .veh-label{ display:block; }
+
+  .stop-marker{
+    border: 1.5px solid rgba(18,22,27,0.9); box-shadow: 0 0 0 1px rgba(255,255,255,0.2);
+    display:flex; align-items:center; justify-content:center;
+    opacity: 0.5; transition: opacity 0.15s ease;
+  }
+  .stop-marker:hover{ opacity: 1; }
+  .stop-single{ width:16px; height:16px; border-radius:2px; }
+  .stop-single.mode-tram{ background: var(--stop-tram); }
+  .stop-single.mode-bus{ background: var(--stop-bus); }
+  .stop-mixed{ width:32px; height:16px; border-radius:2px; padding:0; overflow:hidden; }
+  .stop-half{ width:16px; height:16px; display:flex; align-items:center; justify-content:center; }
+  .stop-half.mode-tram{ background: var(--stop-tram); }
+  .stop-half.mode-bus{ background: var(--stop-bus); }
+  .popup-chips{ display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; max-width:220px; }
+  .timetable-btn{
+    margin-top:8px; width:100%; background:var(--bg); color:var(--focus); border:1px solid var(--panel-line);
+    border-radius:6px; padding:6px 10px; font-size:12.5px; cursor:pointer; font-family:inherit;
+  }
+  .timetable-btn:hover{ background:var(--panel-line); }
+  #timetableModal{ display:none; }
+  #timetableModalContent{
+    position:fixed; top:190px; left:20px; z-index:1500;
+    background:var(--panel); border:1px solid var(--panel-line); border-radius:10px;
+    width:320px; max-width:85vw; max-height:70vh; overflow-y:auto; padding:0 18px 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  }
+  @media (max-width: 768px) {
+    /* Changed from centering to a bottom-anchored panel: a centered modal
+       at a reasonable readable width still ended up covering nearly the
+       whole screen on a real phone, leaving no map visible at all --
+       confirmed directly from a real device screenshot. Matching the
+       same "anchored to the bottom, map stays visible above" pattern as
+       the main vehicle-list sheet keeps one consistent mobile language
+       instead of two different popup behaviors. overflow-y:auto is
+       already set in the base rule above -- carried over here as well,
+       having just learned exactly what happens when it's missing. */
+    #timetableModalContent{
+      top: auto; left: 0; right: 0; bottom: 0; transform: none;
+      width: auto; max-width: none; max-height: 50vh;
+      border-radius: 16px 16px 0 0; overflow-y: auto;
+    }
+  }
+  #timetableStickyBar{
+    position: sticky; top: 0; z-index: 3; background: var(--panel);
+    display: flex; align-items: center; justify-content: center; min-height: 14px;
+    padding-top: 18px; border-radius: 10px 10px 0 0;
+  }
+  #modalStopsToggleBtn{
+    position: absolute; left: 10px; top: 0; bottom: 0; margin: auto 0; height: 24px;
+    background:none; border:none; color:var(--text-dim);
+    cursor:pointer; padding:4px 8px; line-height:1; display:flex; align-items:center;
+  }
+  #modalStopsToggleBtn[aria-pressed="false"]{ color: var(--late); }
+  #timetableCloseBtn{
+    position: absolute; right: 10px; /* horizontally anchored to the edge; vertical
+       centering comes from align-items:center on the sticky bar above, via
+       top/bottom:0 here, rather than a hardcoded pixel offset -- a hardcoded
+       top value is exactly what broke the last time this bar's height changed. */
+    top: 0; bottom: 0; margin: auto 0; height: 24px;
+    background:none; border:none; color:var(--text-dim);
+    font-size:16px; cursor:pointer; padding:4px 8px; line-height:1;
+  }
+  #timetableCloseBtn:hover{ color:var(--text); }
+  .timetable-title{ font-size:16px; font-weight:700; margin:0 28px 2px 0; }
+  .timetable-date{ font-size:12px; color:var(--text-dim); margin-bottom:12px; }
+  /* Scoped specifically to this modal (these classes aren't used elsewhere):
+     stick the title+date together right below the handle/close bar, instead
+     of letting them scroll away while an otherwise-empty sticky bar remains
+     pinned on top of whatever content happens to be underneath it -- that
+     mismatch was producing a visibly garbled overlap during scroll. */
+  #timetableModalBody > .timetable-title, #timetableModalBody > .timetable-date{
+    position: sticky; background: var(--panel); z-index: 2;
+  }
+  #timetableModalBody > .timetable-title{ top: 14px; padding-top: 4px; }
+  #timetableModalBody > .timetable-date{ top: 34px; padding-bottom: 6px; }
+  .timetable-row{ display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px dashed var(--panel-line); font-size:13px; }
+  .timetable-row:last-child{ border-bottom:none; }
+  .timetable-row-clickable{ cursor:pointer; margin:0 -6px; padding-left:6px; padding-right:6px; border-radius:5px; }
+  .timetable-row-clickable:hover{ background:var(--bg); }
+  @keyframes vehicleRouteFlow{ to{ stroke-dashoffset:-56; } }
+  .vehicle-route-flow{ animation: vehicleRouteFlow 1s linear infinite; }
+  .timetable-time{ font-family:"Courier New", ui-monospace, monospace; font-weight:700; min-width:42px; }
+  .timetable-headsign{ color:var(--text-dim); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chip{
+    font-family: "Courier New", ui-monospace, monospace; font-size: 11px; font-weight:700;
+    padding: 1px 6px; border-radius: 3px; color:#fff;
+  }
+  .chip.tram{ background: var(--veh-tram); }
+  .chip.bus{ background: var(--veh-bus); }
+  .stop-letter{
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-weight: 800; font-size: 10px; color: #12161B; line-height: 1; user-select: none;
+  }
+
+  .user-dot{
+    width:14px; height:14px; border-radius:50%; background:#4A90D9;
+    border:2px solid #fff; box-shadow:0 0 0 2px rgba(74,144,217,0.45); position:relative;
+  }
+  .user-dot-pulse{
+    position:absolute; inset:-7px; border-radius:50%; background: rgba(74,144,217,0.35);
+    animation: user-pulse 2s ease-out infinite;
+  }
+  @keyframes user-pulse{ 0%{ transform:scale(0.5); opacity:0.9; } 100%{ transform:scale(2.1); opacity:0; } }
+  @media (prefers-reduced-motion: reduce){ .user-dot-pulse{ animation: none; opacity:0.5; } }
+
+  .leaflet-control-attribution{
+    background: rgba(26,32,39,0.85) !important; color: var(--text-dim) !important;
+    border-radius: 4px 0 0 0; padding: 2px 8px; font-size: 11px;
+  }
+  .leaflet-control-attribution a{ color: var(--text-dim) !important; }
+  .leaflet-bar{ border: none !important; box-shadow: 0 1px 5px rgba(0,0,0,0.65) !important; }
+  .leaflet-control-zoom a{
+    background: var(--panel) !important; color: var(--text) !important;
+    border-bottom: 1px solid var(--panel-line) !important;
+  }
+  .leaflet-control-zoom a:hover{ background: var(--bg) !important; }
+  .leaflet-control-zoom a:last-child{ border-bottom: none !important; }
+  .locate-btn{
+    width:40px; height:40px; background: var(--panel); border: 1px solid var(--panel-line);
+    border-radius:4px; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.65); margin-top: 8px;
+  }
+  .locate-btn.active{ background: #4A90D9; }
+  .build-tag{ font-size: 10px; color: var(--text-dim); opacity: 0.7; margin-left: 6px; font-family: "Courier New", ui-monospace, monospace; }
+  #locateError{
+    display:none; padding: 8px 20px; background: var(--warn-bg); color: var(--warn-text);
+    font-size: 13px; border-bottom: 1px solid var(--panel-line);
+  }
+
+  /* --- trip planner --- */
+  .planner-field{ display:flex; flex-direction:column; gap:4px; margin-bottom:10px; }
+  .planner-field label{ font-size:11px; color:var(--text-dim); }
+  .planner-field .row{ gap:6px; }
+  .planner-field input[type="text"]{
+    flex:1; min-width:0; background: var(--bg); border: 1px solid var(--panel-line); color: var(--text);
+    padding: 7px 9px; border-radius: 6px; font-size: 13px; font-family: inherit;
+  }
+  .planner-field select{
+    background: var(--bg); border: 1px solid var(--panel-line); color: var(--text);
+    padding: 7px 9px; border-radius: 6px; font-size: 13px; font-family: inherit;
+  }
+  .planner-field select:disabled{ color: var(--text-dim); cursor: not-allowed; }
+  #lineSelect option.inactive-line{ color: var(--text-dim); }
+  .planner-field-hint{ font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+  .line-stop-row{
+    display:flex; align-items:center; gap:8px; padding:8px 10px; font-size:13px;
+    cursor:pointer; border-bottom:1px solid var(--panel-line);
+  }
+  .line-stop-row:last-child{ border-bottom:none; }
+  .line-stop-row:hover{ background:#202832; }
+  .line-stop-row .stop-seq{
+    font-family:"Courier New", ui-monospace, monospace; font-weight:700; color:var(--text-dim);
+    min-width:20px; text-align:right; flex-shrink:0;
+  }
+  .line-stop-timetable-btn{
+    flex-shrink:0; background:none; border:1px solid var(--panel-line); border-radius:5px;
+    color:var(--text-dim); font-size:13px; padding:3px 7px; cursor:pointer; line-height:1;
+  }
+  .line-stop-timetable-btn:hover{ background:var(--bg); color:var(--focus); }
+  #plannerSubmit{
+    width:100%; padding:9px; margin-top:4px; background: var(--focus); color:#12161B;
+    border:none; border-radius:6px; font-weight:700; font-size:13px; cursor:pointer;
+  }
+  #plannerSubmit:disabled{ background: var(--panel-line); color: var(--text-dim); cursor:not-allowed; }
+  #plannerHint{ font-size:11.5px; color: var(--text-dim); margin: 2px 0 10px; min-height: 14px; }
+  .plan-option{
+    border: 1px solid var(--panel-line); border-radius:8px; padding:10px; margin-bottom:10px;
+  }
+  .plan-option-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .plan-times{ font-family:"Courier New", ui-monospace, monospace; font-weight:700; font-size:14px; }
+  .plan-badge{ font-size:10.5px; padding:2px 6px; border-radius:4px; background: var(--panel-line); color: var(--text-dim); }
+  .plan-leg{ font-size:12.5px; color: var(--text-dim); display:flex; align-items:center; gap:6px; margin:3px 0; }
+  .plan-leg .chip{ font-size:10.5px; padding:1px 5px; }
+  .plan-warning{
+    font-size:11.5px; color: var(--warn-text); background: var(--warn-bg); border-radius:5px;
+    padding:4px 7px; margin:6px 0;
+  }
+  .plan-ticket{ margin-top:8px; padding-top:8px; border-top:1px dashed var(--panel-line); font-size:12.5px; }
+  .plan-ticket .price{ font-weight:700; color: var(--text); }
+  .plan-ticket .recommended{ color: var(--ontime); }
+  @media (prefers-reduced-motion: reduce){ * { transition: none !important; } }
+</style>
 </head>
 <body>
-    <h1>Hello Łódź!</h1>
-    <p>Your Flask app is running successfully on Render 🚋</p>
+
+<div id="brandHero">
+  <img src="/icons/trabus-app-icon.svg" alt="TramBus Łódź" class="brand-logo">
+  <div class="brand-text">
+    <div class="brand-name">TramBus Łódź</div>
+    <div class="brand-tagline">Śledź. Planuj. Jedź.</div>
+  </div>
+  <div class="hero-trust">
+    <div class="hero-trust-headline">Miasto w ruchu. Teraz możesz to zobaczyć.</div>
+    <div class="hero-trust-sub">Oficjalne dane miejskie · odświeżanie co 5 s</div>
+  </div>
+  <div class="dropdown-wrap" style="margin-left:auto;">
+    <button id="linksBadge" aria-expanded="false">🔗 Przydatne strony</button>
+    <div id="linksPanel" class="dropdown-panel" style="display:none;"></div>
+  </div>
+</div>
+<header>
+  <h1><img src="/icons/trabus-glyph.svg" alt="" class="h1-icon">Łódź — pojazdy komunikacji miejskiej na żywo<span class="build-tag">build 84</span></h1>
+  <div id="statsTicker" class="stats-ticker" style="display:none;" aria-live="polite"></div>
+  <div id="headerActions">
+    <div class="dropdown-wrap">
+      <button id="alertsBadge" style="display:none;" aria-expanded="false">⚠ <span id="alertsCount">0</span> Utrudnienia</button>
+      <div id="alertsPanel" class="dropdown-panel" style="display:none;"></div>
+    </div>
+    <div class="date-display">
+      <span class="date-value" id="dateValue">—</span>
+      <span class="date-day" id="dayValue">—</span>
+    </div>
+  </div>
+</header>
+<div id="staleBanner" role="alert"></div>
+<div id="locateError" role="alert"></div>
+<div id="timetableModal" style="display:none;">
+  <div id="timetableModalContent">
+    <div id="timetableStickyBar">
+      <button id="modalStopsToggleBtn" aria-label="Pokaż/ukryj przystanki" aria-pressed="true">
+        <svg width="16" height="16" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 24 C 11 11, 37 11, 44 24 C 37 37, 11 37, 4 24 Z"/>
+          <circle cx="24" cy="24" r="6.5"/>
+        </svg>
+      </button>
+      <div id="timetableDragHandle"></div>
+      <button id="timetableCloseBtn" aria-label="Zamknij">✕</button>
+    </div>
+    <div id="timetableModalBody"></div>
+  </div>
+</div>
+
+<main>
+  <div id="map" role="application" aria-label="Mapa pozycji pojazdów w Łodzi"></div>
+  <aside aria-label="Lista i filtry pojazdów" class="sheet-collapsed" id="mainAside">
+    <div id="sheetHandle" role="button" aria-label="Rozwiń lub zwiń panel" tabindex="0"></div>
+    <div class="controls">
+      <div class="row">
+        <button class="toggle" id="stopsToggleBadge" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px;" aria-pressed="true">
+          <svg width="16" height="16" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+            <path d="M4 24 C 11 11, 37 11, 44 24 C 37 37, 11 37, 4 24 Z"/>
+            <circle cx="24" cy="24" r="6.5"/>
+          </svg>
+          <span id="stopsToggleLabel">Ukryj przystanki</span>
+        </button>
+      </div>
+      <div class="row" role="group" aria-label="Filtruj wg rodzaju pojazdu">
+        <button class="toggle" data-mode="all" aria-pressed="true">Wszystkie</button>
+        <button class="toggle" data-mode="tram" aria-pressed="false">Tramwaje</button>
+        <button class="toggle" data-mode="bus" aria-pressed="false">Autobusy</button>
+      </div>
+      <div class="row" role="group" aria-label="Widok">
+        <button class="toggle" data-view="map" aria-pressed="true">Widok mapy</button>
+        <button class="toggle" data-view="line" aria-pressed="false">Widok linii</button>
+        <button class="toggle" data-view="planner" aria-pressed="false">Planer trasy</button>
+      </div>
+      <div class="row">
+        <select id="search" aria-label="Wybierz linię"><option value="">— wszystkie linie —</option></select>
+        <div class="stat-box" aria-live="polite">
+          <span class="stat-value" id="activeCount">0</span>
+          <span class="stat-label">Aktywne pojazdy</span>
+        </div>
+      </div>
+      <div id="routeShapeStatus" style="display:none; font-size:11.5px; color:var(--text-dim); margin-top:2px;"></div>
+      <div class="row" id="mobileInfoRow" style="display:none;">
+        <div class="dropdown-wrap" style="width:100%;">
+          <button class="toggle" id="infoBadge" style="width:100%;" aria-expanded="false">ℹ️ Info</button>
+          <div id="infoPanel" class="dropdown-panel" style="display:none; left:0; right:auto; width:290px; max-width:none; font-size:12px; color:var(--text-dim);">
+            <div>Dane: GTFS / GTFS-RT, Zarząd Dróg i Transportu w Łodzi (Portal Otwartych Danych Miasta Łodzi) · odświeżanie co 5 s</div>
+            <div class="meta" id="metaLineMobile" style="margin-top:8px;">Łączenie z serwerem…</div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="dropdown-wrap" style="width:100%;">
+          <button class="toggle" id="legendBadge" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px;" aria-expanded="false">
+            <svg width="16" height="16" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+              <path d="M4 8 L18 4 L18 40 L4 44 Z"/>
+              <path d="M18 4 L31 8 L31 44 L18 40 Z"/>
+              <path d="M31 8 L44 4 L44 40 L31 44 Z"/>
+              <path d="M8 14 L14 14 L11 9 Z"/>
+              <rect x="8.5" y="19" width="5" height="5"/>
+              <circle cx="11" cy="30" r="2.6"/>
+            </svg>
+            Legenda mapy
+          </button>
+          <div id="legendPanel" class="dropdown-panel" style="display:none; left:0; right:auto; width:290px; max-width:none;">
+            <div class="legend" style="border-bottom:none; padding:0; gap:12px;">
+              <span><i class="legend-triangle" style="border-bottom-color:var(--veh-tram);"></i>Tramwaj</span>
+              <span><i class="legend-triangle" style="border-bottom-color:var(--veh-bus);"></i>Autobus</span>
+              <span><i class="dot" style="width:16px; height:16px; border-radius:50%; background:var(--veh-tram);"></i>Tramwaj – kierunek nieznany</span>
+              <span><i class="dot" style="width:16px; height:16px; border-radius:50%; background:var(--veh-bus);"></i>Autobus – kierunek nieznany</span>
+              <span><i class="dot" style="width:16px; height:16px; border-radius:3px; background:transparent; border:2px solid var(--veh-tram);"></i>Zatrzymany</span>
+              <span><i class="dot" style="width:16px; height:16px; border-radius:50%; background:transparent; border:2px solid var(--late);"></i>Opóźniony</span>
+              <span><i class="dot" style="width:16px; height:16px; border-radius:50%; background:transparent; border:2px solid var(--ontime);"></i>Na czas / przed czasem</span>
+              <span><div class="stop-marker stop-single mode-tram">T</div>Przystanek tramwajowy</span>
+              <span><div class="stop-marker stop-single mode-bus">B</div>Przystanek autobusowy</span>
+              <span><div class="stop-marker stop-mixed"><div class="stop-half mode-tram">T</div><div class="stop-half mode-bus">B</div></div>Przystanek wspólny</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="list" tabindex="0"></div>
+    <div id="plannerPanel" style="display:none; padding:14px 16px; overflow-y:auto;">
+      <div class="planner-field">
+        <label for="lineSelect">Wybierz linię</label>
+        <select id="lineSelect"><option value="">— wybierz linię —</option></select>
+      </div>
+      <div id="plannerHint"></div>
+      <div class="planner-field">
+        <label for="fromSelect">Skąd</label>
+        <select id="fromSelect" disabled><option value="">— najpierw wybierz linię —</option></select>
+      </div>
+      <div class="planner-field">
+        <label for="toSelect">Dokąd</label>
+        <select id="toSelect" disabled><option value="">— najpierw wybierz linię —</option></select>
+      </div>
+      <button id="plannerSubmit" type="button" disabled>Oblicz czas i cenę</button>
+      <div id="plannerResults"></div>
+    </div>
+    <div id="lineViewPanel" style="display:none; padding:14px 16px; overflow-y:auto;">
+      <div id="lineViewHint" class="planner-field-hint">Wpisz numer linii w polu wyszukiwania powyżej, aby zobaczyć jej przystanki.</div>
+      <div id="lineViewStops"></div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <span>Dane: GTFS / GTFS-RT, Zarząd Dróg i Transportu w Łodzi (Portal Otwartych Danych Miasta Łodzi) · odświeżanie co 5 s</span>
+  <span class="meta" id="metaLine">Łączenie z serwerem…</span>
+</footer>
+<div id="sr-status" role="status" aria-live="polite"></div>
+
+<script>
+const LABEL_ZOOM_THRESHOLD = 15;   // route-number label appears once zoomed in past this
+const STOP_ZOOM_THRESHOLD = 14;    // stop markers appear once zoomed in past this
+const MOVE_THRESHOLD_M = 8;        // ignore tiny GPS jitter when computing heading
+let searchTerm = ''; // declared early: syncStopVisibility()/syncRouteShape() read this during initial page load
+let focusedVehicleId = null;      // same reason: read inside matches(), called during initial page load
+let focusedTripStopIds = null;    // same reason: read inside syncStopVisibility()
+
+const map = L.map('map', { zoomControl: true }).setView([51.7592, 19.4560], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 19
+}).addTo(map);
+
+const stopsLayer = L.layerGroup();
+let stopsLoaded = false;
+let stopMarkers = []; // { marker, routes: [{name, mode}, ...] } — kept individually so a line filter can show just its own stops
+let routeShapeLayer = null;
+
+// Stops normally only appear once zoomed in (2417 of them would be pure
+// clutter city-wide) — but when a specific line is selected, its handful of
+// stops are shown regardless of zoom, since there's no clutter concern for
+// just one line and seeing the whole route's stops at once is genuinely useful.
+function applyZoomClass(){
+  const el = document.getElementById('map');
+  if(map.getZoom() >= LABEL_ZOOM_THRESHOLD) el.classList.add('zoomed-in');
+  else el.classList.remove('zoomed-in');
+  syncStopVisibility();
+}
+map.on('zoomend', applyZoomClass);
+
+let stopsManuallyHidden = false;
+
+function syncStopVisibility(){
+  const filtering = !!searchTerm;
+  const zoomedEnough = map.getZoom() >= STOP_ZOOM_THRESHOLD;
+  stopMarkers.forEach(entry => {
+    let show;
+    if(stopsManuallyHidden){
+      show = false;
+    } else if(focusedTripStopIds !== null){
+      // Vehicle focus mode: match the map exactly to what the popup already
+      // lists (current + remaining stops of this specific trip) — not
+      // "every stop on this line," which could include stops this vehicle
+      // will never actually reach today (the other direction, a branch).
+      show = focusedTripStopIds.has(entry.id);
+    } else if(filtering){
+      show = entry.routes.some(r => r.name.toLowerCase() === searchTerm);
+    } else {
+      show = zoomedEnough;
+    }
+    if(show){ if(!stopsLayer.hasLayer(entry.marker)) stopsLayer.addLayer(entry.marker); }
+    else { if(stopsLayer.hasLayer(entry.marker)) stopsLayer.removeLayer(entry.marker); }
+  });
+  if(!stopsManuallyHidden && (focusedTripStopIds !== null || filtering || zoomedEnough)){ if(!map.hasLayer(stopsLayer)) stopsLayer.addTo(map); }
+  else { if(map.hasLayer(stopsLayer)) map.removeLayer(stopsLayer); }
+}
+
+// The physical route path — bold yellow for trams, bold blue for buses.
+// Drawn under markers automatically (Leaflet's overlay pane sits below the
+// marker pane), so it never blocks vehicle or stop icons.
+function setRouteShapeStatus(text){
+  const status = document.getElementById('routeShapeStatus');
+  status.textContent = text;
+  // Collapse out of the flex layout entirely when empty — otherwise this
+  // reserved div plus its own gap on both sides created a visibly bigger
+  // space here than between any other row. Confirmed by measuring actual
+  // pixel gaps: 34px here vs a flat 10px everywhere else in .controls.
+  status.style.display = text ? 'block' : 'none';
+}
+
+async function syncRouteShape(){
+  if(routeShapeLayer){ map.removeLayer(routeShapeLayer); routeShapeLayer = null; }
+  if(!searchTerm){ setRouteShapeStatus(''); return; }
+  setRouteShapeStatus('Wczytuję przebieg trasy…');
+  try{
+    const res = await fetch(`/api/route-shape?route=${encodeURIComponent(searchTerm)}`);
+    const data = await res.json();
+    if(!res.ok || data.error){
+      setRouteShapeStatus(`Brak przebiegu trasy: ${data.error || res.status}`);
+      return;
+    }
+    if(!data.shapes || !data.shapes.length){
+      setRouteShapeStatus('Serwer nie zwrócił punktów trasy dla tej linii.');
+      return;
+    }
+    const color = data.mode === 'tram' ? '#FFD500' : '#1E90FF';
+    // Most routes have 2+ real physical paths (each direction usually
+    // differs slightly, sometimes a lot) — drawing every included shape
+    // instead of just the single most common one is what actually makes
+    // the drawn line match the stops shown on the map; confirmed on a
+    // real case where the single-shape version only covered 30 of a
+    // route's 93 real stops.
+    const allLayers = [];
+    data.shapes.forEach(points => {
+      allLayers.push(L.polyline(points, { color: '#0A0D10', weight: 10, opacity: 0.9 }));
+      allLayers.push(L.polyline(points, { color, weight: 6, opacity: 1 }));
+    });
+    routeShapeLayer = L.featureGroup(allLayers).addTo(map);
+    map.fitBounds(routeShapeLayer.getBounds(), { padding: [40, 40] });
+    const totalPoints = data.shapes.reduce((sum, s) => sum + s.length, 0);
+    setRouteShapeStatus(`Trasa narysowana: ${data.shapes.length} przebieg(i), ${totalPoints} pkt łącznie (${data.mode || '?'})`);
+  } catch(err){
+    console.error('failed to load route shape', err);
+    setRouteShapeStatus('Błąd połączenia przy wczytywaniu trasy.');
+  }
+}
+
+applyZoomClass();
+
+// Bold letters read far better than tiny vehicle silhouettes at 16px — simple wins here.
+function stopLetter(letter){
+  return `<span class="stop-letter">${letter}</span>`;
+}
+
+function stopIcon(routes){
+  const hasTram = routes.some(r => r.mode === 'tram');
+  const hasBus = routes.some(r => r.mode === 'bus');
+  if(hasTram && hasBus){
+    return {
+      html: `<div class="stop-marker stop-mixed">
+               <div class="stop-half mode-tram">${stopLetter('T')}</div>
+               <div class="stop-half mode-bus">${stopLetter('B')}</div>
+             </div>`,
+      size: [32, 16], anchor: [16, 8]
+    };
+  }
+  if(hasTram){
+    return { html: `<div class="stop-marker stop-single mode-tram">${stopLetter('T')}</div>`, size: [16, 16], anchor: [8, 8] };
+  }
+  return { html: `<div class="stop-marker stop-single mode-bus">${stopLetter('B')}</div>`, size: [16, 16], anchor: [8, 8] };
+}
+
+function stopPopupHtml(stop){
+  const chips = stop.routes.map(r =>
+    `<span class="chip ${r.mode}">${r.name}</span>`
+  ).join('');
+  return (
+    `<div class="popup-route">🚏 ${stop.name}</div>` +
+    `<div class="popup-row"><span>Linie (${stop.routes.length})</span></div>` +
+    `<div class="popup-chips">${chips || '<span class="popup-row">brak danych</span>'}</div>` +
+    `<button class="timetable-btn" onclick="showStopTimetable('${stop.id}', '${stop.name.replace(/'/g, "\\'")}')">🕐 Pokaż rozkład</button>`
+  );
+}
+
+// Shared by both entry points — the stop popup on the map (any view) and
+// Line View's clickable stop list — so there's one timetable experience,
+// always showing every line at that stop rather than whichever one you
+// happened to click through.
+let vehicleRouteLayer = null;
+function clearVehicleRouteLayer(){
+  if(vehicleRouteLayer){ map.removeLayer(vehicleRouteLayer); vehicleRouteLayer = null; }
+  vehicleRouteShapeTripId = null;
+}
+
+// Shows exactly where one specific vehicle is headed: every remaining stop
+// with a live ETA (schedule + its current real delay), plus its exact path
+// highlighted on the map — not just "one of the route's shapes" but the
+// precise one this vehicle's specific trip follows.
+let currentVehicleDetailId = null;
+
+let vehicleRouteShapeTripId = null; // which trip's shape is currently drawn, so refreshes don't needlessly recreate it
+let vehicleFocusModeActive = false;
+// focusedVehicleId / focusedTripStopIds: when set, only this exact vehicle
+// and only its precise remaining-stop set show — mirrors the popup exactly,
+// declared early above since syncStopVisibility() reads them at page load.
+
+function exitVehicleFocusMode(){
+  if(!vehicleFocusModeActive) return;
+  vehicleFocusModeActive = false;
+  document.body.classList.remove('vehicle-focus-mode');
+  focusedVehicleId = null;
+  focusedTripStopIds = null;
+  syncMarkers(); renderList(); updateActiveCount();
+  syncStopVisibility();
+}
+
+async function showVehicleRoute(tripId, currentSeq, delaySec, route, mode, headsign, vehicleId){
+  currentVehicleDetailId = vehicleId;
+
+  // Focus mode: show only this exact vehicle (not other vehicles sharing the
+  // same line number) and only the stops it will actually still reach today
+  // — mirroring the popup precisely, since a line-wide match could include
+  // stops from the other direction this trip never visits.
+  if(!vehicleFocusModeActive || focusedVehicleId !== vehicleId){
+    focusedVehicleId = vehicleId;
+    focusedTripStopIds = new Set(); // hide all stops until the real list arrives, so nothing wrong flashes on screen
+    if(routeShapeLayer){ map.removeLayer(routeShapeLayer); routeShapeLayer = null; } // avoid a redundant static line alongside the animated one below
+    syncMarkers(); renderList(); updateActiveCount();
+    syncStopVisibility();
+    document.body.classList.add('vehicle-focus-mode');
+    vehicleFocusModeActive = true;
+  }
+
+  const modal = document.getElementById('timetableModal');
+  const body = document.getElementById('timetableModalBody');
+  const modeIcon = mode === 'tram' ? '🚊' : '🚌';
+  const titleHtml = `<div class="timetable-title">${modeIcon} Linia ${route} → ${headsign || '?'}</div>`;
+  const scrollBefore = body.scrollTop; // preserve position across the periodic auto-refresh below
+  const isSameTrip = tripId === vehicleRouteShapeTripId && vehicleRouteLayer !== null;
+  if(!isSameTrip){
+    body.innerHTML = `${titleHtml}<div class="timetable-date">Wczytuję trasę…</div>`;
+  }
+  modal.style.display = 'block';
+  if(window.innerWidth <= 768){
+    initTimetableDrag();
+    if(!isSameTrip) timetableSheetDrag.snapTo(0);
+  }
+  // Only clear the shape when actually switching to a different trip — every
+  // 5-second auto-refresh was destroying and recreating this same polyline,
+  // which restarted its CSS flow animation from scratch each time and
+  // caused a visible stutter every cycle. The shape itself never changes
+  // between refreshes of the same trip, so leaving it alone lets the
+  // animation run uninterrupted while only the stop list/ETAs below update.
+  if(!isSameTrip) clearVehicleRouteLayer();
+
+  try{
+    const res = await fetch(`/api/vehicle-detail?trip_id=${encodeURIComponent(tripId)}&current_stop_sequence=${currentSeq}&delay_s=${delaySec}`);
+    const data = await res.json();
+    if(!res.ok || data.error){
+      body.innerHTML = `${titleHtml}<div class="timetable-date">${data.error || 'Błąd wczytywania trasy.'}</div>`;
+      return;
+    }
+    if(!isSameTrip && data.shape && data.shape.length){
+      const color = mode === 'tram' ? '#FFD500' : '#1E90FF';
+      const casing = L.polyline(data.shape, { color: '#0A0D10', weight: 10, opacity: 0.9 });
+      // Dashed + animated stroke-dashoffset gives a flowing effect along the
+      // line — the shape's points are already in the GTFS trip's real
+      // sequence order (start to end), so animating the offset in one
+      // consistent direction visually flows the same way the vehicle
+      // actually travels, not just a generic decoration.
+      const line = L.polyline(data.shape, { color, weight: 6, opacity: 1, dashArray: '12, 16' });
+      vehicleRouteLayer = L.layerGroup([casing, line]).addTo(map);
+      const lineEl = line.getElement();
+      if(lineEl) lineEl.classList.add('vehicle-route-flow');
+      vehicleRouteShapeTripId = tripId;
+    }
+    focusedTripStopIds = new Set(data.stops.map(s => s.stop_id));
+    syncStopVisibility();
+    if(!data.stops.length){
+      body.innerHTML = `${titleHtml}<div class="timetable-date">Koniec trasy — brak dalszych przystanków.</div>`;
+      return;
+    }
+    const rows = data.stops.map(s => `
+      <div class="timetable-row timetable-row-clickable" data-stop-id="${s.stop_id}">
+        <span class="timetable-time">${s.time}</span>
+        <span class="timetable-headsign" style="flex:1;">${s.name}</span>
+        <span style="color:var(--text-dim); font-size:12px; flex-shrink:0;">${s.eta_min <= 0 ? 'teraz' : s.eta_min + ' min'}</span>
+      </div>`).join('');
+    body.innerHTML = `${titleHtml}<div class="timetable-date">Pojazd nr ${vehicleId} · pozostałe przystanki (kliknij, aby pokazać na mapie)</div>${rows}`;
+    body.scrollTop = scrollBefore;
+    body.querySelectorAll('.timetable-row-clickable').forEach(row => {
+      row.addEventListener('click', () => {
+        const stop = ALL_STOPS.find(s => s.id === row.dataset.stopId);
+        if(!stop) return;
+        map.setView([stop.lat, stop.lon], 17);
+        document.getElementById('sr-status').textContent = `Wycentrowano mapę na przystanku ${stop.name}`;
+      });
+    });
+  } catch(err){
+    console.error('failed to load vehicle detail', err);
+    body.innerHTML = `${titleHtml}<div class="timetable-date">Błąd połączenia z serwerem.</div>`;
+  }
+}
+
+// Called after every 5-second vehicle poll: if this panel is open, refetch
+// with the vehicle's now-current position so passed stops actually drop off
+// the list instead of it staying frozen at whatever moment it was opened —
+// the backend already filters to stop_seq >= current_seq, so feeding it a
+// fresh current_stop_sequence each cycle is all that's needed.
+function refreshOpenVehicleDetail(){
+  if(currentVehicleDetailId === null) return;
+  if(document.getElementById('timetableModal').style.display === 'none') { currentVehicleDetailId = null; return; }
+  const v = VEHICLES.find(veh => veh.id === currentVehicleDetailId);
+  if(!v){
+    const body = document.getElementById('timetableModalBody');
+    body.innerHTML = `<div class="timetable-title">Pojazd nr ${currentVehicleDetailId}</div><div class="timetable-date">Ten pojazd nie jest już śledzony na żywo.</div>`;
+    clearVehicleRouteLayer();
+    currentVehicleDetailId = null;
+    exitVehicleFocusMode();
+    return;
+  }
+  showVehicleRoute(v.trip_id, v.current_stop_sequence, v.delay_s || 0, v.route, v.mode, v.headsign, v.id);
+}
+
+async function showStopTimetable(stopIdsStr, stopName){
+  currentVehicleDetailId = null; // opening a stop timetable in the shared modal must stop any vehicle refresh loop
+  clearVehicleRouteLayer();
+  exitVehicleFocusMode();
+  const modal = document.getElementById('timetableModal');
+  const body = document.getElementById('timetableModalBody');
+  body.innerHTML = `<div class="timetable-title">${stopName}</div><div class="timetable-date">Wczytuję rozkład…</div>`;
+  modal.style.display = 'block';
+  if(window.innerWidth <= 768){
+    initTimetableDrag();
+    timetableSheetDrag.snapTo(0);
+  }
+  try{
+    const res = await fetch(`/api/stop-timetable?stop_ids=${encodeURIComponent(stopIdsStr)}`);
+    const data = await res.json();
+    if(!res.ok || data.error){
+      body.innerHTML = `<div class="timetable-title">${stopName}</div><div class="timetable-date">${data.error || 'Błąd wczytywania rozkładu.'}</div>`;
+      return;
+    }
+    const dateLabel = `${data.date.slice(6,8)}.${data.date.slice(4,6)}.${data.date.slice(0,4)}`;
+    if(!data.entries.length){
+      body.innerHTML = `<div class="timetable-title">${data.stop_name || stopName}</div>` +
+        `<div class="timetable-date">${dateLabel} — brak zaplanowanych odjazdów do końca dnia</div>`;
+      return;
+    }
+    const rows = data.entries.map(e => `
+      <div class="timetable-row">
+        <span class="timetable-time">${e.time}</span>
+        <span class="chip ${e.mode}">${e.route}</span>
+        <span class="timetable-headsign">${e.headsign}</span>
+      </div>`).join('');
+    body.innerHTML = `<div class="timetable-title">${data.stop_name || stopName}</div>` +
+      `<div class="timetable-date">${dateLabel} · ${data.entries.length} odjazdów</div>${rows}`;
+  } catch(err){
+    console.error('failed to load stop timetable', err);
+    body.innerHTML = `<div class="timetable-title">${stopName}</div><div class="timetable-date">Błąd połączenia z serwerem.</div>`;
+  }
+}
+document.getElementById('timetableCloseBtn').addEventListener('click', () => {
+  document.getElementById('timetableModal').style.display = 'none';
+  clearVehicleRouteLayer();
+  currentVehicleDetailId = null;
+  exitVehicleFocusMode();
+});
+
+let ALL_STOPS = [];
+
+async function loadStops(){
+  try{
+    const res = await fetch('/api/stops');
+    const data = await res.json();
+    ALL_STOPS = data.stops;
+    data.stops.forEach(stop => {
+      const spec = stopIcon(stop.routes);
+      const icon = L.divIcon({
+        html: spec.html, className: '', iconSize: spec.size, iconAnchor: spec.anchor, popupAnchor: [0, -10]
+      });
+      const m = L.marker([stop.lat, stop.lon], { icon, keyboard: false });
+      m.bindPopup(stopPopupHtml(stop), { closeButton: false });
+      // Hover-intent, not plain hover: the popup now has a clickable button
+      // in it, and a plain mouseout-closes-immediately behavior would make
+      // that button nearly unreachable (moving off the tiny marker toward
+      // the button fires mouseout before the click registers). A short
+      // delay, cancelled if the mouse lands on the popup itself, fixes it.
+      let closeTimer = null;
+      m.on('mouseover', function(){
+        if(closeTimer){ clearTimeout(closeTimer); closeTimer = null; }
+        this.openPopup();
+      });
+      m.on('mouseout', function(){
+        closeTimer = setTimeout(() => m.closePopup(), 200);
+      });
+      m.on('popupopen', function(e){
+        const popupEl = e.popup.getElement();
+        if(!popupEl) return;
+        popupEl.addEventListener('mouseenter', () => { if(closeTimer){ clearTimeout(closeTimer); closeTimer = null; } });
+        popupEl.addEventListener('mouseleave', () => { closeTimer = setTimeout(() => m.closePopup(), 200); });
+      });
+      stopMarkers.push({ marker: m, routes: stop.routes, id: stop.id });
+    });
+    stopsLoaded = true;
+    syncStopVisibility();
+  } catch(err){
+    console.error('failed to load stops', err);
+  }
+}
+loadStops();
+
+// --- trip planner: pick a line, then pick From/To from two dropdowns ---
+let selectedLine = null;
+let routeStops = []; // [{name, ids: [stop_id, ...]}, ...] for the currently chosen line — grouped by
+                      // display name, since one name can be several real platforms (confirmed: a
+                      // real case had 4 platforms across 2 names where only 1 of 4 combos connects)
+
+function lineOptionsHtml(routes, placeholder){
+  let html = `<option value="">${placeholder}</option>`;
+  routes.forEach(r => {
+    const label = r.active ? r.name : `${r.name} (brak pojazdów teraz)`;
+    html += `<option value="${r.name}" ${r.active ? '' : 'class="inactive-line"'}>${label}</option>`;
+  });
+  return html;
+}
+
+async function populateLineDropdowns(){
+  try{
+    const res = await fetch('/api/routes');
+    const data = await res.json();
+    document.getElementById('lineSelect').innerHTML = lineOptionsHtml(data.routes, '— wybierz linię —');
+    document.getElementById('search').innerHTML = lineOptionsHtml(data.routes, '— wszystkie linie —');
+  } catch(err){ console.error('failed to load route list', err); }
+}
+populateLineDropdowns();
+
+function setPlannerHint(msg){ document.getElementById('plannerHint').textContent = msg || ''; }
+function updatePlannerSubmitState(){
+  const fromVal = document.getElementById('fromSelect').value;
+  const toVal = document.getElementById('toSelect').value;
+  document.getElementById('plannerSubmit').disabled = !(fromVal && toVal && fromVal !== toVal);
+}
+
+// A stop group picked in one dropdown is disabled in the other, so the same
+// stop can never be chosen for both From and To. The option value is the
+// comma-joined id list for that name — /api/trip-plan already knows how to
+// try every id in a comma-joined list, so no extra plumbing is needed here.
+function renderRouteSelects(){
+  const fromSel = document.getElementById('fromSelect');
+  const toSel = document.getElementById('toSelect');
+  const fromVal = fromSel.value;
+  const toVal = toSel.value;
+
+  function buildOptions(selectEl, excludeVal, keepVal){
+    let html = '<option value="">— wybierz przystanek —</option>';
+    routeStops.forEach(s => {
+      const val = s.ids.join(',');
+      html += `<option value="${val}" ${val === excludeVal ? 'disabled' : ''}>${s.name}</option>`;
+    });
+    selectEl.innerHTML = html;
+    selectEl.value = keepVal || '';
+    selectEl.disabled = routeStops.length === 0;
+  }
+  buildOptions(fromSel, toVal, fromVal);
+  buildOptions(toSel, fromVal, toVal);
+}
+
+document.getElementById('fromSelect').addEventListener('change', () => {
+  const fromSel = document.getElementById('fromSelect');
+  const toSel = document.getElementById('toSelect');
+  if(toSel.value === fromSel.value) toSel.value = '';
+  renderRouteSelects();
+  document.getElementById('plannerResults').innerHTML = '';
+  updatePlannerSubmitState();
+});
+document.getElementById('toSelect').addEventListener('change', () => {
+  const fromSel = document.getElementById('fromSelect');
+  const toSel = document.getElementById('toSelect');
+  if(fromSel.value === toSel.value) fromSel.value = '';
+  renderRouteSelects();
+  document.getElementById('plannerResults').innerHTML = '';
+  updatePlannerSubmitState();
+});
+
+// Keeps the main "look for lines" search box (and the map/list it filters)
+// in sync with whichever line is picked in the route planner, so switching
+// to Map/List view afterward already shows just that line — one search
+// experience instead of two separate ones.
+function syncMainSearchWithLine(name){
+  document.getElementById('search').value = name || '';
+  searchTerm = (name || '').toLowerCase();
+  // reset to "All" in case the line's mode (tram/bus) doesn't match whatever
+  // filter was active — otherwise picking a bus line while "Trams" was
+  // selected would silently show zero results with no obvious reason why.
+  activeMode = 'all';
+  document.querySelectorAll('button[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === 'all' ? 'true' : 'false'));
+  syncMarkers(); renderList(); updateActiveCount();
+  syncStopVisibility(); syncRouteShape();
+}
+
+document.getElementById('lineSelect').addEventListener('change', async e => {
+  const name = e.target.value;
+  document.getElementById('plannerResults').innerHTML = '';
+  const fromSel = document.getElementById('fromSelect');
+  const toSel = document.getElementById('toSelect');
+  if(!name){
+    routeStops = [];
+    fromSel.innerHTML = toSel.innerHTML = '<option value="">— najpierw wybierz linię —</option>';
+    fromSel.disabled = toSel.disabled = true;
+    setPlannerHint('');
+    updatePlannerSubmitState();
+    syncMainSearchWithLine('');
+    return;
+  }
+  try{
+    const res = await fetch(`/api/route-stops?route=${encodeURIComponent(name)}`);
+    const data = await res.json();
+    if(!res.ok || data.error){
+      routeStops = [];
+      fromSel.innerHTML = toSel.innerHTML = '<option value="">— najpierw wybierz linię —</option>';
+      fromSel.disabled = toSel.disabled = true;
+      setPlannerHint(data.error || `Nie znaleziono linii "${name}".`);
+      updatePlannerSubmitState();
+      return;
+    }
+    routeStops = data.stops;
+    selectedLine = name;
+    renderRouteSelects();
+    setPlannerHint('Wybierz przystanek początkowy i docelowy tej linii.');
+    updatePlannerSubmitState();
+    syncMainSearchWithLine(name);
+  } catch(err){
+    console.error(err);
+    setPlannerHint('Błąd połączenia z serwerem.');
+  }
+});
+
+function renderPlanOption(opt){
+  const warn = opt.long_wait_warning
+    ? `<div class="plan-warning">⚠ Długi czas oczekiwania — może istnieć lepsze połączenie, którego planer nie znalazł.</div>` : '';
+  const legsHtml = opt.legs.map(leg => `
+    <div class="plan-leg">
+      <span class="chip ${leg.mode}">${leg.route}</span>
+      <span>${leg.from_stop} ${leg.dep} → ${leg.to_stop} ${leg.arr}</span>
+      ${leg.live_avg_delay_min !== null ? `<span style="color:var(--late)">(+${leg.live_avg_delay_min} min na żywo)</span>` : ''}
+    </div>`).join('');
+
+  const t = opt.ticket;
+  const perStopHtml = t.per_stop_fare
+    ? `Taryfa przystankowa (${t.per_stop_fare.stops} przyst.): <span class="price ${t.recommended==='per_stop'?'recommended':''}">${t.per_stop_fare.price_normal.toFixed(2)} zł</span><br>`
+    : '';
+  const timeTicketHtml = `Bilet ${t.time_ticket.length_min}-min.: <span class="price ${t.recommended==='time_ticket'?'recommended':''}">${t.time_ticket.price_normal.toFixed(2)} zł</span> (ulgowy ${t.time_ticket.price_discounted.toFixed(2)} zł)`;
+  const zoneNote = (t.zones_touched.length > 1 || (t.zones_touched[0] && t.zones_touched[0] !== '1'))
+    ? `<div style="color:var(--warn-text); margin-top:4px;">Trasa wykracza poza strefę 1 (strefy: ${t.zones_touched.join(', ')})</div>` : '';
+  const stopsBadge = opt.legs[0].stops_traveled !== undefined && opt.legs[0].stops_traveled !== null
+    ? `<span class="plan-badge">${opt.legs[0].stops_traveled} przyst.</span>` : '';
+
+  return `
+    <div class="plan-option">
+      <div class="plan-option-head">
+        <span class="plan-times">${opt.departs} → ${opt.arrives}</span>
+        ${stopsBadge}
+      </div>
+      ${legsHtml}
+      ${warn}
+      <div class="plan-ticket">${perStopHtml}${timeTicketHtml}${zoneNote}</div>
+    </div>`;
+}
+
+async function submitTripPlan(){
+  const results = document.getElementById('plannerResults');
+  const fromId = document.getElementById('fromSelect').value;
+  const toId = document.getElementById('toSelect').value;
+  if(!fromId || !toId || fromId === toId) return;
+  results.innerHTML = '<div class="plan-leg">Obliczam czas i cenę…</div>';
+  try{
+    const url = `/api/trip-plan?from=${encodeURIComponent(fromId)}&to=${encodeURIComponent(toId)}&route=${encodeURIComponent(selectedLine)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if(data.error){ results.innerHTML = `<div class="plan-warning">${data.error}</div>`; return; }
+    if(!data.options.length){ results.innerHTML = `<div class="plan-warning">${data.note || 'Nie znaleziono połączenia.'}</div>`; return; }
+    results.innerHTML = data.options.map(renderPlanOption).join('');
+  } catch(err){
+    results.innerHTML = '<div class="plan-warning">Błąd połączenia z serwerem.</div>';
+    console.error(err);
+  }
+}
+document.getElementById('plannerSubmit').addEventListener('click', submitTripPlan);
+
+// --- "share my location" — client-side only, via the browser's own Geolocation API ---
+let watchId = null;
+let userMarker = null;
+
+function locationErrorMessage(err){
+  switch(err.code){
+    case err.PERMISSION_DENIED: return 'Odmówiono dostępu do lokalizacji. Sprawdź uprawnienia strony w przeglądarce.';
+    case err.POSITION_UNAVAILABLE: return 'Lokalizacja obecnie niedostępna.';
+    case err.TIMEOUT: return 'Upłynął czas oczekiwania na lokalizację — spróbuj ponownie.';
+    default: return 'Nie udało się pobrać lokalizacji.';
+  }
+}
+function showLocateError(msg){
+  const el = document.getElementById('locateError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function clearLocateError(){
+  document.getElementById('locateError').style.display = 'none';
+}
+
+function onLocationUpdate(pos){
+  clearLocateError();
+  const { latitude, longitude } = pos.coords;
+  if(!userMarker){
+    const icon = L.divIcon({
+      html: '<div class="user-dot"><div class="user-dot-pulse"></div></div>',
+      className: '', iconSize: [16, 16], iconAnchor: [8, 8]
+    });
+    userMarker = L.marker([latitude, longitude], { icon, zIndexOffset: 1000, keyboard: false }).addTo(map);
+    map.setView([latitude, longitude], Math.max(map.getZoom(), 15));
+  } else {
+    userMarker.setLatLng([latitude, longitude]);
+  }
+  document.getElementById('sr-status').textContent = 'Lokalizacja zaktualizowana';
+}
+
+function onLocationError(err){
+  showLocateError(locationErrorMessage(err));
+  document.getElementById('sr-status').textContent = locationErrorMessage(err);
+}
+
+const LocateControl = L.Control.extend({
+  options: { position: 'topleft' },
+  onAdd: function(){
+    const btn = L.DomUtil.create('button', 'locate-btn');
+    btn.type = 'button';
+    btn.innerHTML = '📍';
+    btn.title = 'Pokaż moją lokalizację';
+    btn.setAttribute('aria-label', 'Pokaż moją lokalizację');
+    btn.setAttribute('aria-pressed', 'false');
+    L.DomEvent.disableClickPropagation(btn);
+    L.DomEvent.on(btn, 'click', () => {
+      if(watchId !== null){
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        if(userMarker){ map.removeLayer(userMarker); userMarker = null; }
+        btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
+        clearLocateError();
+        document.getElementById('sr-status').textContent = 'Udostępnianie lokalizacji zatrzymane';
+        return;
+      }
+      if(!('geolocation' in navigator)){
+        showLocateError('Ta przeglądarka nie obsługuje geolokalizacji.');
+        return;
+      }
+      watchId = navigator.geolocation.watchPosition(onLocationUpdate, onLocationError, {
+        enableHighAccuracy: true, maximumAge: 5000, timeout: 10000
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
+    });
+    return btn;
+  }
+});
+map.addControl(new LocateControl());
+
+let VEHICLES = [];
+let markerById = {};      // id -> Leaflet marker
+let headingById = {};     // id -> { lat, lon, bearing } from the previous poll, for dead-reckoning
+let activeMode = 'all';
+let currentView = 'map';
+
+function delayColor(d){
+  if(d === null || d === undefined) return '#7C868F';
+  return d > 60 ? '#D64545' /* late */ : '#43B75D' /* on time or ahead */;
+}
+function delayLabel(d){
+  if(d === null || d === undefined) return 'brak danych';
+  const mins = Math.round(d/60*10)/10;
+  if(d === 0) return 'na czas';
+  return (d>0? '+' : '') + mins + ' min';
+}
+function statusLabel(status, stop){
+  const s = stop || '—';
+  if(status === 'STOPPED_AT') return `Zatrzymany na: ${s}`;
+  if(status === 'INCOMING_AT') return `Dojeżdża do: ${s}`;
+  return `Zbliża się do: ${s}`;
+}
+function matches(v){
+  if(focusedVehicleId !== null) return v.id === focusedVehicleId;
+  const modeOk = activeMode === 'all' || v.mode === activeMode;
+  const searchOk = !searchTerm || v.route.toLowerCase() === searchTerm;
+  return modeOk && searchOk;
+}
+function updateActiveCount(){
+  document.getElementById('activeCount').textContent = VEHICLES.filter(matches).length;
+}
+
+// Great-circle initial bearing between two lat/lon points, in degrees (0 = north, clockwise).
+function computeBearing(lat1, lon1, lat2, lon2){
+  const toRad = d => d * Math.PI/180, toDeg = r => r * 180/Math.PI;
+  const dLon = toRad(lon2-lon1);
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1))*Math.sin(toRad(lat2)) - Math.sin(toRad(lat1))*Math.cos(toRad(lat2))*Math.cos(dLon);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+// Rough planar distance in meters — fine at city scale, avoids a full haversine for a jitter filter.
+function approxDistanceMeters(lat1, lon1, lat2, lon2){
+  const R = 6371000, toRad = d => d*Math.PI/180;
+  const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R * 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function headingFor(v){
+  const prev = headingById[v.id];
+  let bearing = prev ? prev.bearing : null;
+  if(prev){
+    const dist = approxDistanceMeters(prev.lat, prev.lon, v.lat, v.lon);
+    if(dist >= MOVE_THRESHOLD_M){
+      bearing = computeBearing(prev.lat, prev.lon, v.lat, v.lon);
+    }
+    // else: kept still (or GPS jitter) — retain last known heading rather than reset it
+  }
+  headingById[v.id] = { lat: v.lat, lon: v.lon, bearing };
+  return bearing; // null until we've seen this vehicle move at least once
+}
+
+function buildIcon(v, bearing){
+  const modeColor = v.mode === 'tram' ? '#C9A227' : '#3E77A6';
+  const ring = delayColor(v.delay_s);
+  let inner;
+  if(v.status === 'STOPPED_AT'){
+    inner = `<div class="veh-square" style="background:${modeColor}"></div>`;
+  } else if(bearing === null || bearing === undefined){
+    inner = `<div class="veh-puck" style="background:${modeColor}"></div>`;
+  } else {
+    inner = `<div class="veh-arrow" style="border-bottom-color:${modeColor}; transform: rotate(${bearing}deg);"></div>`;
+  }
+  const html =
+    `<div class="veh-marker">
+       <div class="veh-ring" style="border-color:${ring}">${inner}</div>
+       <div class="veh-label">${v.route}</div>
+     </div>`;
+  return L.divIcon({ html, className: '', iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -10] });
+}
+
+function popupHtml(v){
+  return (
+    `<div class="popup-route">${v.mode === 'tram' ? '🚊' : '🚌'} Linia ${v.route} → ${v.headsign || '?'}</div>` +
+    `<div class="popup-delay" style="color:${delayColor(v.delay_s)}">${delayLabel(v.delay_s)}</div>` +
+    `<div class="popup-row"><span>${statusLabel(v.status, v.next_stop)}</span></div>` +
+    `<div class="popup-row"><span>Prędkość</span><b>${v.speed_kmh} km/h</b></div>` +
+    `<div class="popup-row"><span>Nr taborowy</span><b>${v.id}</b></div>` +
+    `<button class="timetable-btn" onclick="showVehicleRoute('${v.trip_id}', ${v.current_stop_sequence}, ${v.delay_s || 0}, '${v.route}', '${v.mode}', '${(v.headsign || '').replace(/'/g, "\\'")}', '${v.id}')">🗺️ Pokaż trasę pojazdu</button>`
+  );
+}
+
+function syncMarkers(){
+  const seen = new Set();
+  VEHICLES.forEach(v => {
+    seen.add(v.id);
+    const bearing = headingFor(v);
+    let m = markerById[v.id];
+    if(!m){
+      m = L.marker([v.lat, v.lon], { icon: buildIcon(v, bearing), zIndexOffset: 1000 });
+      // Vehicles move continuously and are usually what someone actually
+      // wants to tap; stops are static. Without this, whichever happened
+      // to be added to the map later would win the overlap, which is
+      // essentially arbitrary from the user's perspective -- a vehicle
+      // should always be reachable even when it's sitting right on top of
+      // a stop.
+      m.bindPopup('', { closeButton: false });
+      // Same hover-intent fix as stop markers: the popup now has a clickable
+      // button, so a plain mouseout-closes-immediately would make it nearly
+      // unreachable.
+      let closeTimer = null;
+      m.on('mouseover', function(){
+        if(closeTimer){ clearTimeout(closeTimer); closeTimer = null; }
+        this.openPopup();
+      });
+      m.on('mouseout', function(){
+        closeTimer = setTimeout(() => m.closePopup(), 200);
+      });
+      m.on('popupopen', function(e){
+        const popupEl = e.popup.getElement();
+        if(!popupEl) return;
+        popupEl.addEventListener('mouseenter', () => { if(closeTimer){ clearTimeout(closeTimer); closeTimer = null; } });
+        popupEl.addEventListener('mouseleave', () => { closeTimer = setTimeout(() => m.closePopup(), 200); });
+      });
+      markerById[v.id] = m;
+    } else {
+      m.setLatLng([v.lat, v.lon]);
+      m.setIcon(buildIcon(v, bearing));
+    }
+    m.setPopupContent(popupHtml(v));
+    m.vehicleData = v;
+    if(matches(v)){ if(!map.hasLayer(m)) m.addTo(map); }
+    else { if(map.hasLayer(m)) map.removeLayer(m); }
+  });
+  Object.keys(markerById).forEach(id => {
+    if(!seen.has(id)){ map.removeLayer(markerById[id]); delete markerById[id]; delete headingById[id]; }
+  });
+}
+
+function renderList(){
+  const list = document.getElementById('list');
+  const filtered = VEHICLES.filter(matches).sort((a,b) => a.route.localeCompare(b.route, 'pl', {numeric:true}));
+  list.innerHTML = '';
+  filtered.forEach(v => {
+    const row = document.createElement('div');
+    row.className = 'veh-row';
+    row.tabIndex = 0;
+    row.setAttribute('role','button');
+    row.setAttribute('aria-label', `Linia ${v.route} do ${v.headsign}, ${delayLabel(v.delay_s)}, następny przystanek ${v.next_stop}`);
+    const color = v.mode === 'tram' ? 'var(--veh-tram)' : 'var(--veh-bus)';
+    row.innerHTML =
+      `<span class="veh-route" style="color:${color}">${v.route}</span>` +
+      `<span class="veh-info"><div class="veh-headsign">${v.headsign || '?'}</div><div class="veh-stop">${v.next_stop || '—'}</div></span>` +
+      `<span class="veh-delay" style="color:${delayColor(v.delay_s)}">${delayLabel(v.delay_s)}</span>`;
+    const focusVehicle = () => {
+      map.setView([v.lat, v.lon], 16);
+      const m = markerById[v.id];
+      if(m) m.openPopup();
+      document.getElementById('sr-status').textContent = `Wycentrowano mapę na linii ${v.route}, ${delayLabel(v.delay_s)}`;
+    };
+    row.addEventListener('click', focusVehicle);
+    row.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); focusVehicle(); }});
+    list.appendChild(row);
+  });
+}
+
+document.querySelectorAll('button[data-mode]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('button[data-mode]').forEach(b => b.setAttribute('aria-pressed','false'));
+    btn.setAttribute('aria-pressed','true');
+    activeMode = btn.dataset.mode;
+    syncMarkers(); renderList(); updateActiveCount();
+  });
+});
+document.querySelectorAll('button[data-view]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('button[data-view]').forEach(b => b.setAttribute('aria-pressed','false'));
+    btn.setAttribute('aria-pressed','true');
+    currentView = btn.dataset.view;
+    document.getElementById('list').style.display = currentView === 'map' ? 'block' : 'none';
+    document.getElementById('plannerPanel').style.display = currentView === 'planner' ? 'block' : 'none';
+    document.getElementById('lineViewPanel').style.display = currentView === 'line' ? 'block' : 'none';
+    if(currentView === 'line') renderLineViewStops();
+  });
+});
+document.getElementById('search').addEventListener('change', e => {
+  searchTerm = e.target.value.trim().toLowerCase();
+  syncMarkers(); renderList(); updateActiveCount();
+  syncStopVisibility(); syncRouteShape();
+  if(currentView === 'line') renderLineViewStops();
+});
+
+// Line View: browse a line's full stop list while the map stays filtered
+// to just that line via the main search box — reuses /api/route-stops,
+// same grouped-by-name data the planner already relies on (so a line with
+// two platforms sharing a name shows one row here too, not a confusing
+// duplicate).
+async function renderLineViewStops(){
+  const hint = document.getElementById('lineViewHint');
+  const stopsEl = document.getElementById('lineViewStops');
+  if(!searchTerm){
+    hint.textContent = 'Wpisz numer linii w polu wyszukiwania powyżej, aby zobaczyć jej przystanki.';
+    hint.style.display = 'block';
+    stopsEl.innerHTML = '';
+    return;
+  }
+  try{
+    const res = await fetch(`/api/route-stops?route=${encodeURIComponent(searchTerm)}`);
+    const data = await res.json();
+    if(!res.ok || data.error){
+      hint.textContent = data.error || `Nie znaleziono linii "${searchTerm}".`;
+      hint.style.display = 'block';
+      stopsEl.innerHTML = '';
+      return;
+    }
+    hint.style.display = 'none';
+    stopsEl.innerHTML = data.stops.map((s, i) => `
+      <div class="line-stop-row" data-ids="${s.ids.join(',')}" tabindex="0" role="button" aria-label="${s.name}">
+        <span class="stop-seq">${i + 1}.</span>
+        <span style="flex:1;">${s.name}</span>
+        <button class="line-stop-timetable-btn" data-ids="${s.ids.join(',')}" data-name="${s.name.replace(/"/g, '&quot;')}" aria-label="Pokaż rozkład: ${s.name}">🕐</button>
+      </div>`).join('');
+    stopsEl.querySelectorAll('.line-stop-row').forEach(el => {
+      const focus = () => focusStopFromLineView(el.dataset.ids);
+      el.addEventListener('click', focus);
+      el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); focus(); }});
+    });
+    stopsEl.querySelectorAll('.line-stop-timetable-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // don't also trigger the row's pan-to-stop click
+        showStopTimetable(btn.dataset.ids, btn.dataset.name);
+      });
+    });
+  } catch(err){
+    console.error(err);
+    hint.textContent = 'Błąd połączenia z serwerem.';
+    hint.style.display = 'block';
+  }
+}
+
+function focusStopFromLineView(idsStr){
+  const ids = idsStr.split(',');
+  const stop = ALL_STOPS.find(s => ids.includes(s.id));
+  if(!stop) return;
+  map.setView([stop.lat, stop.lon], 17);
+  document.getElementById('sr-status').textContent = `Wycentrowano mapę na przystanku ${stop.name}`;
+}
+
+function effectLabel(effect){
+  const labels = {
+    NO_SERVICE: 'Brak kursowania', REDUCED_SERVICE: 'Ograniczone kursowanie',
+    SIGNIFICANT_DELAYS: 'Duże opóźnienia', DETOUR: 'Objazd',
+    ADDITIONAL_SERVICE: 'Dodatkowe kursy', MODIFIED_SERVICE: 'Zmieniona trasa',
+    OTHER_EFFECT: 'Inne', UNKNOWN_EFFECT: 'Utrudnienie',
+  };
+  return labels[effect] || 'Utrudnienie';
+}
+
+let alertsPanelOpen = false;
+function renderAlerts(alerts){
+  const badge = document.getElementById('alertsBadge');
+  const panel = document.getElementById('alertsPanel');
+  if(!alerts.length){
+    badge.style.display = 'none';
+    panel.style.display = 'none';
+    alertsPanelOpen = false;
+    return;
+  }
+  badge.style.display = 'inline-block';
+  document.getElementById('alertsCount').textContent = alerts.length;
+  panel.innerHTML = alerts.map(a => `
+    <div class="alert-item">
+      <div class="alert-header">${effectLabel(a.effect)}${a.header ? ': ' + a.header : ''}</div>
+      ${a.routes.length ? `<div class="alert-routes">${a.routes.map(r => `<span class="plan-badge">${r}</span>`).join('')}</div>` : ''}
+      ${a.description ? `<div class="alert-desc">${a.description}</div>` : ''}
+    </div>`).join('');
+  panel.style.display = alertsPanelOpen ? 'block' : 'none';
+}
+document.getElementById('alertsBadge').addEventListener('click', (e) => {
+  e.stopPropagation();
+  alertsPanelOpen = !alertsPanelOpen;
+  document.getElementById('alertsBadge').setAttribute('aria-expanded', String(alertsPanelOpen));
+  document.getElementById('alertsPanel').style.display = alertsPanelOpen ? 'block' : 'none';
+});
+
+// Just add more {name, url} entries here as you find other useful city sites —
+// nothing else needs to change.
+const USEFUL_LINKS = [
+  { name: 'MPK Łódź (oficjalna strona)', url: 'https://www.mpk.lodz.pl/' },
+  { name: 'Migawka (Łódzka Karta Miejska)', url: 'http://www.migawka.lodz.pl/' },
+  { name: 'Łódź.pl (portal miasta)', url: 'https://lodz.pl/' },
+];
+document.getElementById('linksPanel').innerHTML = USEFUL_LINKS.map(l =>
+  `<a href="${l.url}" target="_blank" rel="noopener noreferrer">${l.name} ↗</a>`
+).join('');
+let linksPanelOpen = false;
+document.getElementById('linksBadge').addEventListener('click', (e) => {
+  e.stopPropagation();
+  linksPanelOpen = !linksPanelOpen;
+  document.getElementById('linksBadge').setAttribute('aria-expanded', String(linksPanelOpen));
+  document.getElementById('linksPanel').style.display = linksPanelOpen ? 'block' : 'none';
+});
+
+let legendPanelOpen = false;
+document.getElementById('legendBadge').addEventListener('click', (e) => {
+  e.stopPropagation();
+  legendPanelOpen = !legendPanelOpen;
+  document.getElementById('legendBadge').setAttribute('aria-expanded', String(legendPanelOpen));
+  document.getElementById('legendPanel').style.display = legendPanelOpen ? 'block' : 'none';
+});
+
+let infoPanelOpen = false;
+document.getElementById('infoBadge').addEventListener('click', (e) => {
+  e.stopPropagation();
+  infoPanelOpen = !infoPanelOpen;
+  document.getElementById('infoBadge').setAttribute('aria-expanded', String(infoPanelOpen));
+  document.getElementById('infoPanel').style.display = infoPanelOpen ? 'block' : 'none';
+});
+
+function setStopsHidden(hidden){
+  stopsManuallyHidden = hidden;
+  const sidebarBtn = document.getElementById('stopsToggleBadge');
+  sidebarBtn.setAttribute('aria-pressed', String(!hidden));
+  document.getElementById('stopsToggleLabel').textContent = hidden ? 'Pokaż przystanki' : 'Ukryj przystanki';
+  document.getElementById('modalStopsToggleBtn').setAttribute('aria-pressed', String(!hidden));
+  syncStopVisibility();
+}
+document.getElementById('stopsToggleBadge').addEventListener('click', () => setStopsHidden(!stopsManuallyHidden));
+document.getElementById('modalStopsToggleBtn').addEventListener('click', () => setStopsHidden(!stopsManuallyHidden));
+
+// Standard dropdown behavior: clicking anywhere outside either popover closes it,
+// so they behave like floating popups rather than needing the same button to close them.
+const alertsWrap = document.getElementById('alertsBadge').closest('.dropdown-wrap');
+const linksWrap = document.getElementById('linksBadge').closest('.dropdown-wrap');
+const legendWrap = document.getElementById('legendBadge').closest('.dropdown-wrap');
+const infoWrap = document.getElementById('infoBadge').closest('.dropdown-wrap');
+document.addEventListener('click', (e) => {
+  if(alertsPanelOpen && !alertsWrap.contains(e.target)){
+    alertsPanelOpen = false;
+    document.getElementById('alertsBadge').setAttribute('aria-expanded', 'false');
+    document.getElementById('alertsPanel').style.display = 'none';
+  }
+  if(linksPanelOpen && !linksWrap.contains(e.target)){
+    linksPanelOpen = false;
+    document.getElementById('linksBadge').setAttribute('aria-expanded', 'false');
+    document.getElementById('linksPanel').style.display = 'none';
+  }
+  if(legendPanelOpen && !legendWrap.contains(e.target)){
+    legendPanelOpen = false;
+    document.getElementById('legendBadge').setAttribute('aria-expanded', 'false');
+    document.getElementById('legendPanel').style.display = 'none';
+  }
+  if(infoPanelOpen && !infoWrap.contains(e.target)){
+    infoPanelOpen = false;
+    document.getElementById('infoBadge').setAttribute('aria-expanded', 'false');
+    document.getElementById('infoPanel').style.display = 'none';
+  }
+});
+
+async function pollAlerts(){
+  try{
+    const res = await fetch('/api/alerts');
+    const data = await res.json();
+    renderAlerts(data.alerts || []);
+  } catch(err){ console.error('failed to load alerts', err); }
+}
+
+function updateDateDisplay(){
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy = now.getFullYear();
+  const dateStr = `${dd}.${mm}.${yyyy}`;
+  let day = now.toLocaleDateString('pl-PL', { weekday: 'long' });
+  day = day.charAt(0).toUpperCase() + day.slice(1);
+
+  // Only touch the DOM when the value actually changes (once per day, in
+  // practice) — this runs every 5 seconds via poll(), and repeatedly
+  // rewriting identical text was producing a visible flicker even though
+  // nothing was actually different.
+  const dateEl = document.getElementById('dateValue');
+  const dayEl = document.getElementById('dayValue');
+  if(dateEl.textContent !== dateStr) dateEl.textContent = dateStr;
+  if(dayEl.textContent !== day) dayEl.textContent = day;
+}
+updateDateDisplay();
+
+let networkFacts = [];
+let tickerIndex = 0;
+let tickerRotateTimer = null;
+
+function renderTickerFact(){
+  const el = document.getElementById('statsTicker');
+  if(!networkFacts.length){ el.style.display = 'none'; return; }
+  const f = networkFacts[tickerIndex % networkFacts.length];
+  el.style.display = 'block';
+  el.innerHTML = `${f.label}: <strong>${f.value}</strong>`;
+}
+
+async function loadNetworkStats(){
+  try{
+    const res = await fetch('/api/network-stats');
+    const data = await res.json();
+    networkFacts = data.facts || [];
+    if(tickerIndex >= networkFacts.length) tickerIndex = 0;
+    renderTickerFact();
+    if(!tickerRotateTimer && networkFacts.length > 1){
+      tickerRotateTimer = setInterval(() => {
+        tickerIndex = (tickerIndex + 1) % networkFacts.length;
+        renderTickerFact();
+      }, 6000);
+    }
+  } catch(err){
+    console.error('failed to load network stats', err);
+  }
+}
+loadNetworkStats();
+setInterval(loadNetworkStats, 30000); // refresh the underlying data slowly -- these facts don't meaningfully change every 5s like vehicle positions do
+
+async function poll(){
+  updateDateDisplay();
+  try{
+    const res = await fetch('/api/vehicles');
+    const data = await res.json();
+    VEHICLES = data.vehicles;
+    const trams = VEHICLES.filter(v=>v.mode==='tram').length;
+    const buses = VEHICLES.filter(v=>v.mode==='bus').length;
+    const metaHtml =
+      `Ostatnia aktualizacja: <strong>${data.age_seconds !== null ? Math.round(data.age_seconds)+' s temu' : '—'}</strong> · ` +
+      `<strong>${VEHICLES.length}</strong> pojazdów (${trams} tramwaje, ${buses} autobusy)`;
+    document.getElementById('metaLine').innerHTML = metaHtml;
+    const metaMobile = document.getElementById('metaLineMobile');
+    if(metaMobile) metaMobile.innerHTML = metaHtml;
+    const banner = document.getElementById('staleBanner');
+    if(data.stale){
+      banner.style.display = 'block';
+      banner.textContent = 'Dane mogą być nieaktualne — serwer nie otrzymał świeżej odpowiedzi z miejskiego źródła danych.';
+    } else {
+      banner.style.display = 'none';
+    }
+    syncMarkers();
+    renderList();
+    updateActiveCount();
+    refreshOpenVehicleDetail();
+  } catch(err){
+    document.getElementById('metaLine').textContent = 'Brak połączenia z serwerem lokalnym.';
+    console.error(err);
+  }
+  pollAlerts();
+}
+
+poll();
+setInterval(poll, 5000);
+
+// Reusable drag-to-resize for a bottom sheet -- follows the finger live
+// while dragging (not just two fixed states), and snaps to the nearest
+// of a few defined rest heights on release. A quick tap (negligible
+// movement) instead steps between collapsed and the next height up, so
+// both a deliberate drag AND a simple tap remain natural ways to use it.
+function makeDraggableSheet(sheetEl, handleEl, snapPointsVh, initialIndex, onSnapChange){
+  let dragging = false, startY = 0, startHeightPx = 0, maxDragDistance = 0, currentIndex = initialIndex;
+  const vhToPx = vh => (vh / 100) * window.innerHeight;
+  const pxToVh = px => (px / window.innerHeight) * 100;
+
+  function setHeightPx(px, animate){
+    sheetEl.style.transition = animate ? 'max-height 0.25s ease' : 'none';
+    sheetEl.style.maxHeight = px + 'px';
+  }
+  function nearestIndex(vh){
+    let best = 0, bestDist = Infinity;
+    snapPointsVh.forEach((sp, i) => { const d = Math.abs(sp - vh); if(d < bestDist){ bestDist = d; best = i; } });
+    return best;
+  }
+  function snapTo(index){
+    index = Math.max(0, Math.min(index, snapPointsVh.length - 1));
+    setHeightPx(vhToPx(snapPointsVh[index]), true);
+    if(onSnapChange) onSnapChange(index);
+    return index;
+  }
+  function getY(e){ return e.touches ? e.touches[0].clientY : e.clientY; }
+
+  function onStart(e){
+    dragging = true;
+    maxDragDistance = 0;
+    startY = getY(e);
+    startHeightPx = sheetEl.getBoundingClientRect().height;
+    setHeightPx(startHeightPx, false);
+  }
+  function onMove(e){
+    if(!dragging) return;
+    const delta = startY - getY(e); // dragging finger up => delta positive => sheet grows
+    maxDragDistance = Math.max(maxDragDistance, Math.abs(delta));
+    const minH = vhToPx(snapPointsVh[0]) * 0.6;
+    const maxH = vhToPx(snapPointsVh[snapPointsVh.length - 1]) * 1.05;
+    setHeightPx(Math.max(minH, Math.min(startHeightPx + delta, maxH)), false);
+    if(e.cancelable) e.preventDefault();
+  }
+  function onEnd(){
+    if(!dragging) return;
+    dragging = false;
+    if(maxDragDistance < 12){
+      currentIndex = currentIndex === 0 ? 1 : 0; // a tap: step, don't snap back to the same spot
+    } else {
+      currentIndex = nearestIndex(pxToVh(sheetEl.getBoundingClientRect().height));
+    }
+    currentIndex = snapTo(currentIndex);
+  }
+
+  handleEl.addEventListener('touchstart', onStart, { passive: true });
+  handleEl.addEventListener('mousedown', onStart);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onEnd);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+
+  snapTo(initialIndex);
+  return { snapTo, getCurrentIndex: () => currentIndex };
+}
+
+const mainSheetDrag = makeDraggableSheet(
+  document.getElementById('mainAside'), document.getElementById('sheetHandle'),
+  [20, 45, 75], 0,
+  index => document.body.classList.toggle('sheet-expanded', index > 0)
+);
+document.getElementById('sheetHandle').addEventListener('keydown', e => {
+  if(e.key === 'Enter' || e.key === ' '){
+    e.preventDefault();
+    mainSheetDrag.snapTo(mainSheetDrag.getCurrentIndex() === 0 ? 1 : 0);
+  }
+});
+
+let timetableSheetDrag = null;
+function initTimetableDrag(){
+  if(timetableSheetDrag) return; // only needs setting up once; the element persists, only its content/visibility changes
+  timetableSheetDrag = makeDraggableSheet(
+    document.getElementById('timetableModalContent'), document.getElementById('timetableDragHandle'),
+    [18, 75], 0
+  );
+}
+</script>
 </body>
 </html>
