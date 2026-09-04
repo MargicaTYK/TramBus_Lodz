@@ -3,7 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Fetch live vehicle data every 5 seconds
     const fetchVehicles = () => {
-        fetch("/vehicles")
+        fetch("/api/vehicles")
             .then(response => response.json())
             .then(data => {
                 console.log("Live vehicles:", data.vehicles);
@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Fetch alerts
     const fetchAlerts = () => {
-        fetch("/alerts")
+        fetch("/api/alerts")
             .then(response => response.json())
             .then(data => {
                 console.log("Service alerts:", data);
