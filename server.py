@@ -652,7 +652,7 @@ def poller_loop():
         time.sleep(POLL_INTERVAL_SECONDS)
 
 
-@app.route("/vehicles")
+@app.route("/api/vehicles")
 def api_vehicles():
     with _lock:
         age = time.time() - _state["last_fetch_ok"] if _state["last_fetch_ok"] else None
@@ -665,7 +665,7 @@ def api_vehicles():
         })
 
 
-@app.route("/alerts")
+@app.route("/api/alerts")
 def api_alerts():
     with _lock:
         return jsonify({"alerts": _state["alerts"]})
@@ -718,7 +718,7 @@ def _option_from_direct(leg, origin, dest, after_seconds):
     }
 
 
-@app.route("/routes")
+@app.route("/api/routes")
 def api_routes():
     with _lock:
         routes = _state["routes"]
@@ -738,7 +738,7 @@ def api_routes():
         return jsonify({"routes": result})
 
 
-@app.route("/route-shape")
+@app.route("/api/route-shape")
 def api_route_shape():
     from flask import request
     route_input = request.args.get("route", "").strip()
@@ -780,7 +780,7 @@ def seconds_until(time_sec, now_sec):
     return time_sec - now_sec
 
 
-@app.route("/vehicle-detail")
+@app.route("/api/vehicle-detail")
 def api_vehicle_detail():
     from flask import request
     trip_id = request.args.get("trip_id", "").strip()
@@ -834,7 +834,7 @@ def api_vehicle_detail():
         return jsonify({"stops": stop_entries, "shape": shape_points})
 
 
-@app.route("/network-stats")
+@app.route("/api/network-stats")
 def api_network_stats():
     with _lock:
         vehicles = _state["vehicles"]
@@ -883,7 +883,7 @@ def api_network_stats():
     return jsonify({"facts": facts})
 
 
-@app.route("/stop-timetable")
+@app.route("/api/stop-timetable")
 def api_stop_timetable():
     from flask import request
     stop_ids_param = request.args.get("stop_ids", "").strip()
@@ -937,7 +937,7 @@ def api_stop_timetable():
         return jsonify({"stop_name": stop_name, "date": date_param, "entries": entries})
 
 
-@app.route("/route-stops")
+@app.route("/api/route-stops")
 def api_route_stops():
     from flask import request
     route_input = request.args.get("route", "").strip()
@@ -996,7 +996,7 @@ def api_route_stops():
         return jsonify({"route": route_name, "stops": result})
 
 
-@app.route("/trip-plan")
+@app.route("/api/trip-plan")
 def api_trip_plan():
     from flask import request
     origin_ids = [s for s in request.args.get("from", "").split(",") if s]
@@ -1056,7 +1056,7 @@ def api_trip_plan():
         })
 
 
-@app.route("/stops")
+@app.route("/api/stops")
 def api_stops():
     with _lock:
         return jsonify({"stops": _state["stops_full"]})
